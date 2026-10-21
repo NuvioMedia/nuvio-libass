@@ -26,6 +26,6 @@ implementation(files("libs/nuvio-libass-release.aar"))
 
 See [ATTRIBUTION.md](ATTRIBUTION.md) for full credits.
 
-This module is based on [Plezy](https://github.com/edde746/plezy) by edde746,
+This module is based on [Plezy's](https://github.com/edde746/plezy) libass implementation by edde746,
 which is a fork of [libass-android](https://github.com/peerless2012/libass-android)
 by peerless2012. The prebuilt native libass is from [edde746/libass](https://github.com/edde746/libass).
