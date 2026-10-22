@@ -123,7 +123,14 @@ class AssHandler(
    */
   var videoFrameCallback: ((presentationTimeUs: Long, releaseTimeNs: Long) -> Unit)? = null
 
+  /** Timestamp (System.nanoTime) of the last VideoFrameMetadataListener callback.
+   *  Read by AssPositionRenderer to detect when the primary path is active. */
+  @Volatile
+  var lastVideoFrameCallbackNs: Long = 0L
+    internal set
+
   private val videoFrameMetadataListener = VideoFrameMetadataListener { pts, releaseNs, _, _ ->
+    lastVideoFrameCallbackNs = System.nanoTime()
     videoFrameCallback?.invoke(pts, releaseNs)
   }
 

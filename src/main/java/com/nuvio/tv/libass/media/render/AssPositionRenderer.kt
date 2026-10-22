@@ -14,35 +14,29 @@ import com.nuvio.tv.libass.media.AssHandler
  * (driven by VideoFrameMetadataListener) is not firing, this renderer provides
  * the current playback position so subtitles still render.
  *
+ * The activity of the primary path is detected by reading
+ * [AssHandler.lastVideoFrameCallbackNs], which is updated on every frame
+ * metadata callback. When no callback has fired in 500ms, the renderer assumes
+ * tunneled playback and takes over.
+ *
  * Based on peerless2012's AssRenderer approach.
  */
 @OptIn(UnstableApi::class)
 class AssPositionRenderer(private val assHandler: AssHandler) : NoSampleRenderer() {
 
-    // Initialized to 0 (not Long.MIN_VALUE) to avoid integer overflow when
-    // computing elapsed = System.nanoTime() - lastFrameCallbackNs.
-    @Volatile
-    private var lastFrameCallbackNs = 0L
-
     override fun getName(): String = "AssPositionRenderer"
 
     override fun render(positionUs: Long, elapsedRealtimeUs: Long) {
-        val elapsed = System.nanoTime() - lastFrameCallbackNs
-        // Only render from position when frame callback hasn't fired in 500ms.
-        // At ~24fps the callback fires every ~42ms, so 500ms means it's not active.
+        val lastCallback = assHandler.lastVideoFrameCallbackNs
+        // lastCallback == 0 means VideoFrameMetadataListener never fired (tunneling
+        // from the start). nanoTime() - 0 is always > 500ms after boot.
+        val elapsed = System.nanoTime() - lastCallback
         if (elapsed > 500_000_000L) {
             val callback = assHandler.videoFrameCallback ?: return
             // ExoPlayer's render() positionUs has a 10^12 offset from the playback
             // clock. Subtract it to get the actual media position in microseconds.
             callback.invoke(positionUs - RENDERER_POSITION_OFFSET_US, C.TIME_UNSET)
         }
-    }
-
-    /**
-     * Called by the frame callback wrapper to mark that the primary path is active.
-     */
-    fun onFrameCallbackFired() {
-        lastFrameCallbackNs = System.nanoTime()
     }
 
     private companion object {

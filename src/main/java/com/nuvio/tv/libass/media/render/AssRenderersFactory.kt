@@ -22,9 +22,6 @@ class AssRenderersFactory(
     private val delegate: RenderersFactory
 ) : RenderersFactory {
 
-    var positionRenderer: AssPositionRenderer? = null
-        private set
-
     override fun createRenderers(
         eventHandler: Handler,
         videoRendererEventListener: VideoRendererEventListener,
@@ -39,9 +36,7 @@ class AssRenderersFactory(
             textRendererOutput,
             metadataRendererOutput
         )
-        val renderer = AssPositionRenderer(assHandler)
-        positionRenderer = renderer
-        return renderers + renderer
+        return renderers + AssPositionRenderer(assHandler)
     }
 
     override fun createSecondaryRenderer(
