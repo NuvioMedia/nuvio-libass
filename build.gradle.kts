@@ -12,6 +12,8 @@ plugins {
 android {
     namespace = "com.nuvio.tv.libass"
     compileSdk = 35
+    // NDK r29 for 16 KB page alignment (Android 15+) and libc++ compat with mpv-android-lib.
+    ndkVersion = "29.0.14206865"
 
     defaultConfig {
         minSdk = 21
@@ -35,6 +37,15 @@ android {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
             version = "3.22.1"
+        }
+    }
+
+    // Don't bundle libc++_shared.so in the AAR - the app already gets it from
+    // its other native dependencies (mpv-android-lib, ffmpeg). Bundling a stale
+    // copy here causes symbol conflicts via pickFirst.
+    packaging {
+        jniLibs {
+            excludes += "**/libc++_shared.so"
         }
     }
 }
