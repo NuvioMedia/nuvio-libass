@@ -59,5 +59,6 @@ add_dependencies(${CMAKE_PROJECT_NAME} libass_prebuilt_${LIBASS_ABI_TARGET})
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
         ass
         log
+        jnigraphics
         EGL
         c++_shared)

@@ -2,6 +2,7 @@
 // naming so no RegisterNatives/JNI_OnLoad registration is needed.
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
+#include <android/bitmap.h>
 #include <android/log.h>
 #include <jni.h>
 #include <limits.h>
@@ -392,6 +393,64 @@ JNIEXPORT jint JNICALL Java_com_nuvio_tv_libass_AssRender_nativeAssRenderFrameAt
   return writeAtlasHeader(
       env, headerBuf, pack.atlasWidth, pack.quadCount, changed, pack.truncated, pack.requiredPages,
       pack.totalTiles > 0 ? 1 : 0, pack.pageCount, pack.pageHeights, pack.pageQuads, pack.mode);
+}
+
+// Renders a frame into an ARGB Android Bitmap. Composites all libass images with
+// src-over alpha blending directly onto the bitmap pixels (lock the bitmap, blend,
+// unlock). Slower than the atlas GL path but compatible with Canvas-based display.
+// Returns the libass changed flag, or -1 for missing handles/lock failure.
+JNIEXPORT jint JNICALL Java_com_nuvio_tv_libass_AssRender_nativeAssRenderFrameBitmap(
+    JNIEnv* env, jclass clazz, jlong render, jlong track, jlong time,
+    jobject bitmap, jint width, jint height) {
+  if (!render || !track || !bitmap || width <= 0 || height <= 0) return -1;
+
+  int changed;
+  ASS_Image* image = ass_render_frame((ASS_Renderer*)render, (ASS_Track*)track, time, &changed);
+
+  if (changed == 0) return 0;
+
+  // Lock the Android Bitmap pixels
+  AndroidBitmapInfo info;
+  if (AndroidBitmap_getInfo(env, bitmap, &info) != ANDROID_BITMAP_RESULT_SUCCESS) return -1;
+  if (info.format != ANDROID_BITMAP_FORMAT_RGBA_8888) return -1;
+
+  void* pixels;
+  if (AndroidBitmap_lockPixels(env, bitmap, &pixels) != ANDROID_BITMAP_RESULT_SUCCESS) return -1;
+
+  // Clear to transparent
+  memset(pixels, 0, (size_t)info.stride * info.height);
+
+  // Composite each image with src-over blending (same as the GL pipeline's blend)
+  for (ASS_Image* img = image; img != NULL; img = img->next) {
+    if (img->w <= 0 || img->h <= 0) continue;
+    const unsigned int c = img->color;
+    const unsigned cr = (c >> 24) & 0xFFu;
+    const unsigned cg = (c >> 16) & 0xFFu;
+    const unsigned cb = (c >> 8) & 0xFFu;
+    const unsigned ca = 0xFFu - (c & 0xFFu);
+    if (ca == 0) continue;
+
+    for (int y = 0; y < img->h; y++) {
+      if (img->dst_y + y < 0 || img->dst_y + y >= (int)info.height) continue;
+      const uint8_t* src = img->bitmap + (size_t)y * img->stride;
+      uint8_t* dst = (uint8_t*)pixels + (size_t)(img->dst_y + y) * info.stride + (size_t)img->dst_x * 4;
+      for (int x = 0; x < img->w; x++) {
+        if (img->dst_x + x < 0 || img->dst_x + x >= (int)info.width) continue;
+        const unsigned a = (src[x] * ca + 127u) / 255u;
+        if (a == 0) continue;
+        const unsigned inv = 255u - a;
+        uint8_t* p = dst + x * 4;
+        // ARGB_8888 in Android native is actually RGBA in memory on little-endian
+        p[0] = (uint8_t)((cr * a + p[0] * inv + 127u) / 255u);
+        p[1] = (uint8_t)((cg * a + p[1] * inv + 127u) / 255u);
+        p[2] = (uint8_t)((cb * a + p[2] * inv + 127u) / 255u);
+        p[3] = (uint8_t)((255u * a + p[3] * inv + 127u) / 255u);
+      }
+    }
+  }
+
+  AndroidBitmap_unlockPixels(env, bitmap);
+  return changed;
 }
 
 // --- AssFrameTimestamps (EGL_ANDROID_get_frame_timestamps) ---

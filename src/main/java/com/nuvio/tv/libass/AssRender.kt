@@ -46,6 +46,21 @@ class AssRender(nativeAss: Long, private val lock: ReentrantLock) {
 
     @JvmStatic
     external fun nativeAssRenderDeinit(render: Long)
+
+    /**
+     * Renders a frame into an ARGB Android Bitmap. Slower than atlas but works
+     * with Canvas-based display (tunneling fallback). Returns changed flag
+     * (0 = no change, >0 = content changed), or -1 on error.
+     */
+    @JvmStatic
+    external fun nativeAssRenderFrameBitmap(
+      render: Long,
+      track: Long,
+      time: Long,
+      bitmap: android.graphics.Bitmap,
+      width: Int,
+      height: Int
+    ): Int
   }
 
   private var nativeRender: Long = nativeAssRenderInit(nativeAss)
@@ -134,6 +149,28 @@ class AssRender(nativeAss: Long, private val lock: ReentrantLock) {
         requiredPages = header[4],
         hasOutput = header[5] != 0,
         mode = header[7 + 2 * MAX_ATLAS_PAGES]
+      )
+    }
+  }
+
+  /**
+   * Renders a frame into an ARGB [android.graphics.Bitmap]. Composites all libass
+   * images with alpha blending directly onto the bitmap. Slower than the atlas GL
+   * pipeline but does not need a GL surface - suitable for Canvas-based display
+   * (tunneling fallback). Returns the libass changed flag (0 = no change), or -1
+   * on error/missing track.
+   */
+  fun renderFrameBitmap(
+    time: Long,
+    bitmap: android.graphics.Bitmap
+  ): Int {
+    lock.withLock {
+      if (released || nativeRender == 0L) return -1
+      val t = track ?: return -1
+      if (t.released || t.nativeAssTrack == 0L) return -1
+      return nativeAssRenderFrameBitmap(
+        nativeRender, t.nativeAssTrack, time,
+        bitmap, bitmap.width, bitmap.height
       )
     }
   }
