@@ -134,6 +134,10 @@ class AssRender(nativeAss: Long, private val lock: ReentrantLock) {
       if (released || nativeRender == 0L) return null
       val t = track ?: return null
       if (t.released || t.nativeAssTrack == 0L) return null
+      // Drain any dialogue chunks queued by the extractor thread before rendering.
+      // This is the only place pending chunks are fed to libass, keeping the
+      // extractor thread completely lock-free.
+      t.drainPendingChunks()
       val header = frameHeader
       val status =
         nativeAssRenderFrameAtlas(nativeRender, t.nativeAssTrack, time, atlasBuf, atlasMaxW, atlasMaxH, vertexBuf, header)
@@ -168,6 +172,7 @@ class AssRender(nativeAss: Long, private val lock: ReentrantLock) {
       if (released || nativeRender == 0L) return -1
       val t = track ?: return -1
       if (t.released || t.nativeAssTrack == 0L) return -1
+      t.drainPendingChunks()
       return nativeAssRenderFrameBitmap(
         nativeRender, t.nativeAssTrack, time,
         bitmap, bitmap.width, bitmap.height

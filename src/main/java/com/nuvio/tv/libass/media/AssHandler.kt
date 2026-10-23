@@ -361,8 +361,9 @@ class AssHandler(
   }
 
   /**
-   * Reads a dialogue into the track of the given [trackId].
-   * Thread-safe: AssTrack.readChunk internally acquires the shared libass lock.
+   * Enqueues a dialogue chunk for the track of the given [trackId].
+   * Lock-free: chunks are queued and drained by the render thread before
+   * each render, so the extractor thread is never blocked by libass rendering.
    */
   fun readTrackDialogue(
     trackId: String?,
@@ -373,7 +374,7 @@ class AssHandler(
     length: Int = data.size
   ) {
     val t = availableTracks[trackId] ?: return
-    t.readChunk(start, duration, data, offset, length)
+    t.enqueueChunk(start, duration, data, offset, length)
   }
 
   /**
