@@ -132,11 +132,20 @@ class AssHandler(
 
   private val videoFrameMetadataListener = VideoFrameMetadataListener { pts, releaseNs, _, _ ->
     lastVideoFrameCallbackNs = System.nanoTime()
-    videoFrameCallback?.invoke(pts, releaseNs)
+    videoFrameCallback?.invoke(pts - subtitleDelayUs, releaseNs)
   }
 
   /** Maps video effect timestamps to media time. Fed by [AssVideoRendererWrapper]. */
   internal val frameTimeMapper = AssFrameTimeMapper()
+
+  /**
+   * User subtitle delay in microseconds. Positive values delay subtitles (show later),
+   * negative values advance them (show earlier). Applied to both overlay and video
+   * effect rendering paths by subtracting from the video PTS before calling libass.
+   * Set by the client app whenever the user adjusts subtitle timing.
+   */
+  @Volatile
+  var subtitleDelayUs: Long = 0L
 
   private var player: ExoPlayer? = null
 

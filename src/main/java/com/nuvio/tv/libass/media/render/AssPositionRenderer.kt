@@ -35,7 +35,7 @@ class AssPositionRenderer(private val assHandler: AssHandler) : NoSampleRenderer
             val callback = assHandler.videoFrameCallback ?: return
             // ExoPlayer's render() positionUs has a 10^12 offset from the playback
             // clock. Subtract it to get the actual media position in microseconds.
-            callback.invoke(positionUs - RENDERER_POSITION_OFFSET_US, C.TIME_UNSET)
+            callback.invoke(positionUs - RENDERER_POSITION_OFFSET_US - assHandler.subtitleDelayUs, C.TIME_UNSET)
         }
     }
 
