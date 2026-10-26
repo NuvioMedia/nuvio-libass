@@ -7,8 +7,10 @@ import androidx.media3.exoplayer.RenderersFactory
 import androidx.media3.exoplayer.audio.AudioRendererEventListener
 import androidx.media3.exoplayer.metadata.MetadataOutput
 import androidx.media3.exoplayer.text.TextOutput
+import androidx.media3.exoplayer.video.MediaCodecVideoRenderer
 import androidx.media3.exoplayer.video.VideoRendererEventListener
 import com.nuvio.tv.libass.media.AssHandler
+import com.nuvio.tv.libass.media.effect.AssVideoRendererWrapper
 
 /**
  * Wraps an existing [RenderersFactory] and appends an [AssPositionRenderer]
@@ -35,8 +37,13 @@ class AssRenderersFactory(
             audioRendererEventListener,
             textRendererOutput,
             metadataRendererOutput
-        )
-        return renderers + AssPositionRenderer(assHandler)
+        ).toMutableList()
+        // Wrap the video renderer so AssFrameTimeMapper tracks stream offsets.
+        val videoIndex = renderers.indexOfFirst { it is MediaCodecVideoRenderer }
+        if (videoIndex >= 0) {
+            renderers[videoIndex] = AssVideoRendererWrapper(renderers[videoIndex], assHandler.frameTimeMapper)
+        }
+        return (renderers + AssPositionRenderer(assHandler)).toTypedArray()
     }
 
     override fun createSecondaryRenderer(

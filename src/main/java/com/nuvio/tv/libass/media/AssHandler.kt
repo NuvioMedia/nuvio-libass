@@ -9,6 +9,7 @@ import androidx.media3.common.MimeTypes.TEXT_SSA
 import androidx.media3.common.Player.Listener
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
+import com.nuvio.tv.libass.media.effect.AssFrameTimeMapper
 import androidx.media3.common.util.Size
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
@@ -133,6 +134,9 @@ class AssHandler(
     lastVideoFrameCallbackNs = System.nanoTime()
     videoFrameCallback?.invoke(pts, releaseNs)
   }
+
+  /** Maps video effect timestamps to media time. Fed by [AssVideoRendererWrapper]. */
+  internal val frameTimeMapper = AssFrameTimeMapper()
 
   private var player: ExoPlayer? = null
 

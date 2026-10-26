@@ -12,6 +12,12 @@ parsers, Matroska extractor with font extraction), and the foundational renderin
 architecture. Our AssHandler, parser layer, extractor output, and JNI binding
 structure originate from this project.
 
+The video effects rendering path (AssVideoEffectAsync, AssFrameTimeMapper,
+AssVideoRendererWrapper) is inspired by the EFFECTS_ATLAS approach from
+[peerless2012/libass-android PR #90](https://github.com/peerless2012/libass-android/pull/90)
+by moi15moi, which demonstrated drawing subtitles directly onto video frames
+via Media3's GlEffect/GlShaderProgram pipeline.
+
 - Repository: https://github.com/peerless2012/libass-android
 - Author: peerless2012
 - License: Apache 2.0
