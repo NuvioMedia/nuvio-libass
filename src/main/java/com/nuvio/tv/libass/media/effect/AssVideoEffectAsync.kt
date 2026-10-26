@@ -166,6 +166,9 @@ private class AssVideoEffectAsyncProgram(
             }
 
             // Blend shared texture onto video frame.
+            // Clear stale subtitle when track is deselected (e.g. switched to SRT).
+            val hasActiveTrack = assHandler.render?.hasTrack == true
+            if (!hasActiveTrack && textureReady) textureReady = false
             if (textureReady && sharedTexId != 0) blendOnto(inputTex)
         } catch (e: Exception) {
             Log.e(TAG, "queueInputFrame failed", e)

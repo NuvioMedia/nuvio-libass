@@ -93,7 +93,7 @@ internal object AssAtlasPipelineConfig {
    * Android playback often look one frame early. Keep the estimator behind a flag
    * in case a device-specific compositor path later proves it needs this again.
    */
-  internal const val COMPOSITOR_PHASE_LEAD_ENABLED = false
+  internal const val COMPOSITOR_PHASE_LEAD_ENABLED = true
 
   /**
    * Internal raster resolution for the libass overlay, as a fraction of the
