@@ -62,5 +62,6 @@ dependencies {
     compileOnly("androidx.media3:media3-common:1.8.0")
     compileOnly("androidx.media3:media3-exoplayer:1.8.0")
     compileOnly("androidx.media3:media3-extractor:1.8.0")
+    compileOnly("androidx.media3:media3-effect:1.8.0")
     compileOnly("com.google.guava:guava:33.3.1-android")
 }
