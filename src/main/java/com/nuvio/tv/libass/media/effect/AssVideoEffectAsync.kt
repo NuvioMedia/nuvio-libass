@@ -108,7 +108,7 @@ private class AssVideoEffectAsyncProgram(
             val render = assHandler.render
             if (render != null && render.hasTrack && !renderInProgress) {
                 val mediaUs = assHandler.frameTimeMapper.toMediaTimeUs(pts)
-                val delayedUs = if (mediaUs != C.TIME_UNSET) mediaUs - assHandler.subtitleDelayUs else pts
+                val delayedUs = if (mediaUs != C.TIME_UNSET) mediaUs - assHandler.subtitleDelayUs + assHandler.audioDelayUs else pts
                 val timeMs = delayedUs / 1000
                 val scale = AssAtlasPipelineConfig.renderScale
                 val rw = if (scale < 1f) Math.round(w * scale) else w

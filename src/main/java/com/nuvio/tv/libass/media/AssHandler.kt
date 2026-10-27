@@ -130,9 +130,14 @@ class AssHandler(
   var lastVideoFrameCallbackNs: Long = 0L
     internal set
 
-  private val videoFrameMetadataListener = VideoFrameMetadataListener { pts, releaseNs, _, _ ->
+  /** Most recent video frame rate from VideoFrameMetadataListener. Safe to read from any thread. */
+  @Volatile var lastVideoFrameRate: Float = 0f
+    internal set
+
+  private val videoFrameMetadataListener = VideoFrameMetadataListener { pts, releaseNs, format, _ ->
     lastVideoFrameCallbackNs = System.nanoTime()
-    videoFrameCallback?.invoke(pts - subtitleDelayUs, releaseNs)
+    if (format != null && format.frameRate > 0f) lastVideoFrameRate = format.frameRate
+    videoFrameCallback?.invoke(pts - subtitleDelayUs + audioDelayUs - calibratedOffsetUs, releaseNs)
   }
 
   /** Maps video effect timestamps to media time. Fed by [AssVideoRendererWrapper]. */
@@ -146,6 +151,24 @@ class AssHandler(
    */
   @Volatile
   var subtitleDelayUs: Long = 0L
+
+  /**
+   * Audio delay in microseconds. When audio is delayed, video frames are held longer,
+   * so subtitles need the same offset to stay in sync with audio. Applied by adding
+   * to the video PTS (same direction as SubtitleOffsetRenderer's audioOffsetUs).
+   * Set by the client app whenever the user adjusts audio delay.
+   */
+  @Volatile
+  var audioDelayUs: Long = 0L
+
+  /**
+   * Auto-calibrated inter-plane offset in microseconds. Positive means the video plane
+   * reaches the display later than the overlay plane (subtitles appear early). Set by
+   * [AssLatencyCalibrator] after convergence. Subtracted from PTS to delay subtitle
+   * rendering and compensate for the display pipeline lag.
+   */
+  @Volatile
+  var calibratedOffsetUs: Long = 0L
 
   private var player: ExoPlayer? = null
 
