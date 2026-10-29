@@ -13,6 +13,10 @@
 #include <sys/stat.h>
 #include <time.h>
 
+#if defined(__ARM_NEON)
+#include <arm_neon.h>
+#endif
+
 static inline long long nowMs(void) {
   struct timespec ts;
   clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -420,7 +424,7 @@ JNIEXPORT jint JNICALL Java_com_nuvio_tv_libass_AssRender_nativeAssRenderFrameBi
   // Clear to transparent
   memset(pixels, 0, (size_t)info.stride * info.height);
 
-  // Composite each image with src-over blending (same as the GL pipeline's blend)
+  // Composite each image with src-over blending, NEON-optimized on ARM
   for (ASS_Image* img = image; img != NULL; img = img->next) {
     if (img->w <= 0 || img->h <= 0) continue;
     const unsigned int c = img->color;
@@ -433,14 +437,39 @@ JNIEXPORT jint JNICALL Java_com_nuvio_tv_libass_AssRender_nativeAssRenderFrameBi
     for (int y = 0; y < img->h; y++) {
       if (img->dst_y + y < 0 || img->dst_y + y >= (int)info.height) continue;
       const uint8_t* src = img->bitmap + (size_t)y * img->stride;
+      // Bitmap stride is in bytes; RGBA_8888 = 4 bytes per pixel
       uint8_t* dst = (uint8_t*)pixels + (size_t)(img->dst_y + y) * info.stride + (size_t)img->dst_x * 4;
-      for (int x = 0; x < img->w; x++) {
+      int x = 0;
+
+#if defined(__ARM_NEON)
+      {
+        const uint8x8_t vr = vdup_n_u8(cr), vg = vdup_n_u8(cg), vb = vdup_n_u8(cb);
+        const uint8x8_t vo = vdup_n_u8(ca);
+        for (; x + 8 <= img->w && img->dst_x + x + 8 <= (int)info.width; x += 8) {
+          uint8x8_t mask = vld1_u8(src + x);
+          uint16x8_t prod = vmull_u8(mask, vo);
+          uint8x8_t k = vraddhn_u16(prod, vrshrq_n_u16(prod, 8));
+          uint8x8_t keep = vmvn_u8(k);
+          uint8x8x4_t d = vld4_u8(dst + x * 4);
+          d.val[0] = vraddhn_u16(vmlal_u8(vmull_u8(vr, k), d.val[0], keep),
+                                  vrshrq_n_u16(vmlal_u8(vmull_u8(vr, k), d.val[0], keep), 8));
+          d.val[1] = vraddhn_u16(vmlal_u8(vmull_u8(vg, k), d.val[1], keep),
+                                  vrshrq_n_u16(vmlal_u8(vmull_u8(vg, k), d.val[1], keep), 8));
+          d.val[2] = vraddhn_u16(vmlal_u8(vmull_u8(vb, k), d.val[2], keep),
+                                  vrshrq_n_u16(vmlal_u8(vmull_u8(vb, k), d.val[2], keep), 8));
+          d.val[3] = vadd_u8(k, vraddhn_u16(vmull_u8(d.val[3], keep),
+                                              vrshrq_n_u16(vmull_u8(d.val[3], keep), 8)));
+          vst4_u8(dst + x * 4, d);
+        }
+      }
+#endif
+      // Scalar tail
+      for (; x < img->w; x++) {
         if (img->dst_x + x < 0 || img->dst_x + x >= (int)info.width) continue;
         const unsigned a = (src[x] * ca + 127u) / 255u;
         if (a == 0) continue;
         const unsigned inv = 255u - a;
         uint8_t* p = dst + x * 4;
-        // ARGB_8888 in Android native is actually RGBA in memory on little-endian
         p[0] = (uint8_t)((cr * a + p[0] * inv + 127u) / 255u);
         p[1] = (uint8_t)((cg * a + p[1] * inv + 127u) / 255u);
         p[2] = (uint8_t)((cb * a + p[2] * inv + 127u) / 255u);
@@ -451,6 +480,134 @@ JNIEXPORT jint JNICALL Java_com_nuvio_tv_libass_AssRender_nativeAssRenderFrameBi
 
   AndroidBitmap_unlockPixels(env, bitmap);
   return changed;
+}
+
+// --- CPU Blend Overlay via ANativeWindow ---
+// NEON-optimized alpha blend directly into ANativeWindow buffer.
+// Zero-copy: ass_render_frame → NEON blend → ANativeWindow_unlockAndPost.
+// JNI names match AssRender companion @JvmStatic external declarations.
+
+#include <android/native_window.h>
+#include <android/native_window_jni.h>
+
+typedef struct {
+  ANativeWindow *window;
+  ASS_Image *images;
+  int drawn_l, drawn_t, drawn_r, drawn_b; // previous frame's dirty rect
+  int width, height;
+} CpuBlendState;
+
+static int cpb_empty(int l, int t, int r, int b) { return r <= l || b <= t; }
+
+static void cpb_blend_image(const ASS_Image *img, uint32_t *bits, int stride) {
+  const unsigned cr = (img->color >> 24) & 0xff;
+  const unsigned cg = (img->color >> 16) & 0xff;
+  const unsigned cb = (img->color >> 8) & 0xff;
+  const unsigned ca = 255 - (img->color & 0xff);
+  if (ca == 0) return;
+  for (int y = 0; y < img->h; y++) {
+    const uint8_t *src = img->bitmap + y * img->stride;
+    uint32_t *dst = bits + (img->dst_y + y) * stride + img->dst_x;
+    int x = 0;
+#if defined(__ARM_NEON)
+    {
+      const uint8x8_t vr = vdup_n_u8(cr), vg = vdup_n_u8(cg), vb = vdup_n_u8(cb), vo = vdup_n_u8(ca);
+      for (; x + 8 <= img->w; x += 8) {
+        uint8x8_t mask = vld1_u8(src + x);
+        uint16x8_t prod = vmull_u8(mask, vo);
+        uint8x8_t k = vraddhn_u16(prod, vrshrq_n_u16(prod, 8));
+#if defined(__aarch64__)
+        if (!vmaxv_u8(k)) continue;
+#endif
+        uint8x8_t keep = vmvn_u8(k);
+        uint8x8x4_t d = vld4_u8((uint8_t*)(dst + x));
+        d.val[0] = vraddhn_u16(vmlal_u8(vmull_u8(vr, k), d.val[0], keep),
+                                vrshrq_n_u16(vmlal_u8(vmull_u8(vr, k), d.val[0], keep), 8));
+        d.val[1] = vraddhn_u16(vmlal_u8(vmull_u8(vg, k), d.val[1], keep),
+                                vrshrq_n_u16(vmlal_u8(vmull_u8(vg, k), d.val[1], keep), 8));
+        d.val[2] = vraddhn_u16(vmlal_u8(vmull_u8(vb, k), d.val[2], keep),
+                                vrshrq_n_u16(vmlal_u8(vmull_u8(vb, k), d.val[2], keep), 8));
+        d.val[3] = vadd_u8(k, vraddhn_u16(vmull_u8(d.val[3], keep),
+                                            vrshrq_n_u16(vmull_u8(d.val[3], keep), 8)));
+        vst4_u8((uint8_t*)(dst + x), d);
+      }
+    }
+#endif
+    for (; x < img->w; x++) {
+      unsigned a = (src[x] * ca + 127u) / 255u;
+      if (!a) continue;
+      unsigned inv = 255 - a;
+      uint8_t *p = (uint8_t*)(dst + x);
+      p[0] = (cr * a + p[0] * inv + 127u) / 255u;
+      p[1] = (cg * a + p[1] * inv + 127u) / 255u;
+      p[2] = (cb * a + p[2] * inv + 127u) / 255u;
+      p[3] = a + (p[3] * inv + 127u) / 255u;
+    }
+  }
+}
+
+JNIEXPORT jlong JNICALL Java_com_nuvio_tv_libass_AssRender_nativeCpuBlendCreate(
+    JNIEnv *env, jclass clazz) {
+  return (jlong)calloc(1, sizeof(CpuBlendState));
+}
+
+JNIEXPORT void JNICALL Java_com_nuvio_tv_libass_AssRender_nativeCpuBlendSetWindow(
+    JNIEnv *env, jclass clazz, jlong handle, jobject surface, jint w, jint h) {
+  CpuBlendState *s = (CpuBlendState*)handle;
+  if (s->window) ANativeWindow_release(s->window);
+  s->window = surface ? ANativeWindow_fromSurface(env, surface) : NULL;
+  s->drawn_l = s->drawn_t = s->drawn_r = s->drawn_b = 0;
+  s->images = NULL;
+  s->width = w; s->height = h;
+  if (s->window) ANativeWindow_setBuffersGeometry(s->window, w, h, WINDOW_FORMAT_RGBA_8888);
+}
+
+JNIEXPORT jboolean JNICALL Java_com_nuvio_tv_libass_AssRender_nativeCpuBlendRenderAndPost(
+    JNIEnv *env, jclass clazz, jlong handle, jlong render, jlong track, jlong timeMs, jboolean force) {
+  CpuBlendState *s = (CpuBlendState*)handle;
+  if (!s || !s->window || !render) return JNI_FALSE;
+  int changed = 0;
+  s->images = track ? ass_render_frame((ASS_Renderer*)render, (ASS_Track*)track, timeMs, &changed) : NULL;
+  if (!s->images && cpb_empty(s->drawn_l, s->drawn_t, s->drawn_r, s->drawn_b)) return JNI_FALSE;
+  if (!changed && !force) return JNI_FALSE;
+
+  // Dirty rect = union of previous drawn + current images
+  int nl = 0, nt = 0, nr = 0, nb = 0;
+  for (ASS_Image *img = s->images; img; img = img->next) {
+    if (img->w <= 0 || img->h <= 0) continue;
+    int il = img->dst_x, it = img->dst_y, ir = il + img->w, ib = it + img->h;
+    if (cpb_empty(nl, nt, nr, nb)) { nl = il; nt = it; nr = ir; nb = ib; }
+    else { if (il < nl) nl = il; if (it < nt) nt = it; if (ir > nr) nr = ir; if (ib > nb) nb = ib; }
+  }
+  int dl = s->drawn_l, dt = s->drawn_t, dr = s->drawn_r, db = s->drawn_b;
+  if (!cpb_empty(nl, nt, nr, nb)) {
+    if (cpb_empty(dl, dt, dr, db)) { dl = nl; dt = nt; dr = nr; db = nb; }
+    else { if (nl < dl) dl = nl; if (nt < dt) dt = nt; if (nr > dr) dr = nr; if (nb > db) db = nb; }
+  }
+  if (cpb_empty(dl, dt, dr, db)) return JNI_FALSE;
+
+  ANativeWindow_Buffer buf;
+  ARect aRect = { dl, dt, dr, db };
+  if (ANativeWindow_lock(s->window, &buf, &aRect) != 0) return JNI_FALSE;
+  if (aRect.right > buf.width) aRect.right = buf.width;
+  if (aRect.bottom > buf.height) aRect.bottom = buf.height;
+  uint32_t *bits = (uint32_t*)buf.bits;
+  for (int y = aRect.top; y < aRect.bottom; y++)
+    memset(bits + y * buf.stride + aRect.left, 0, (aRect.right - aRect.left) * 4);
+  for (ASS_Image *img = s->images; img; img = img->next) {
+    if (img->w > 0 && img->h > 0 && img->dst_x + img->w <= buf.width && img->dst_y + img->h <= buf.height)
+      cpb_blend_image(img, bits, buf.stride);
+  }
+  ANativeWindow_unlockAndPost(s->window);
+  s->drawn_l = nl; s->drawn_t = nt; s->drawn_r = nr; s->drawn_b = nb;
+  return JNI_TRUE;
+}
+
+JNIEXPORT void JNICALL Java_com_nuvio_tv_libass_AssRender_nativeCpuBlendRelease(
+    JNIEnv *env, jclass clazz, jlong handle) {
+  CpuBlendState *s = (CpuBlendState*)handle;
+  if (s->window) ANativeWindow_release(s->window);
+  free(s);
 }
 
 // --- AssFrameTimestamps (EGL_ANDROID_get_frame_timestamps) ---

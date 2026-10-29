@@ -58,6 +58,7 @@ add_dependencies(${CMAKE_PROJECT_NAME} libass_prebuilt_${LIBASS_ABI_TARGET})
 # (SurfaceTxProbe resolves its libandroid/libsync entry points via dlsym, so no extra link.)
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
         ass
+        android
         log
         jnigraphics
         EGL

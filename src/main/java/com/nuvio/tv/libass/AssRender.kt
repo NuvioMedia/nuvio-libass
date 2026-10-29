@@ -61,6 +61,12 @@ class AssRender(nativeAss: Long, private val lock: ReentrantLock) {
       width: Int,
       height: Int
     ): Int
+
+    // CPU blend overlay via ANativeWindow (zero-copy NEON path)
+    @JvmStatic external fun nativeCpuBlendCreate(): Long
+    @JvmStatic external fun nativeCpuBlendSetWindow(handle: Long, surface: android.view.Surface?, width: Int, height: Int)
+    @JvmStatic external fun nativeCpuBlendRenderAndPost(handle: Long, render: Long, track: Long, timeMs: Long, force: Boolean): Boolean
+    @JvmStatic external fun nativeCpuBlendRelease(handle: Long)
   }
 
   private var nativeRender: Long = nativeAssRenderInit(nativeAss)
@@ -177,6 +183,20 @@ class AssRender(nativeAss: Long, private val lock: ReentrantLock) {
         nativeRender, t.nativeAssTrack, time,
         bitmap, bitmap.width, bitmap.height
       )
+    }
+  }
+
+  /**
+   * CPU blend path: drains chunks, calls ass_render_frame, NEON-blends into
+   * ANativeWindow buffer, posts. Zero-copy, zero GL. Used by [AssCpuBlendSurfaceView].
+   */
+  fun cpuBlendRenderAndPost(cpuBlendHandle: Long, timeMs: Long, force: Boolean): Boolean {
+    lock.withLock {
+      if (released || nativeRender == 0L) return false
+      val t = track ?: return false
+      if (t.released || t.nativeAssTrack == 0L) return false
+      t.drainPendingChunks()
+      return nativeCpuBlendRenderAndPost(cpuBlendHandle, nativeRender, t.nativeAssTrack, timeMs, force)
     }
   }
 
