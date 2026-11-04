@@ -384,6 +384,35 @@ class AssHandler(
   }
 
   /**
+   * Replaces the track registered for [format] with one parsed from [data], a whole ASS/SSA file,
+   * for callers that swap a subtitle's content while it plays (for example a retimed copy). Unlike
+   * [createTrack] followed by [AssTrack.readBuffer], the new track is filled before it is
+   * registered, so the renderer never switches to an empty track, and the track it replaces is
+   * released once the renderer no longer uses it.
+   * @param format The format of the ASS track; its id is the one [createTrack] registered.
+   * @param data The complete subtitle file.
+   * @return The new track.
+   */
+  @Synchronized
+  fun replaceTrack(format: Format, data: ByteArray): AssTrack {
+    Log.i("AssHandler", "replaceTrack: format = $format, bytes = ${data.size}")
+    createRenderIfNeeded()
+    fontStore.flush { name, fontData -> ass.addFont(name, fontData) }
+
+    val track = ass.createTrack()
+    if (format.initializationData.size > 0) {
+      track.readBuffer(AssHeaderParser.parse(format))
+    }
+    track.readBuffer(data)
+    val previous = availableTracks.put(format.id!!, track)
+
+    updateTrack()
+
+    if (previous != null && previous !== this.track) previous.release()
+    return track
+  }
+
+  /**
    * Ensures the ASS renderer is created if it does not already exist.
    */
   private fun createRenderIfNeeded() {
