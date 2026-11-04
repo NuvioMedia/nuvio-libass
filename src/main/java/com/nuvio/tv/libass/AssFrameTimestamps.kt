@@ -1,6 +1,11 @@
 package com.nuvio.tv.libass
 
 internal object AssFrameTimestamps {
+  init {
+    // The GL thread can call nativeInit before anything else has loaded the library.
+    System.loadLibrary("asskt")
+  }
+
   const val PENDING = -2L
   const val INVALID = -1L
 
