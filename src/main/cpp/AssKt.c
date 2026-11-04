@@ -153,6 +153,10 @@ JNIEXPORT jlong JNICALL Java_com_nuvio_tv_libass_AssTrack_nativeAssTrackNextEven
 
 // The fork's fontconfig build has no Android font search defaults. A tiny
 // process-local config lets /system fonts resolve without adding Context/JNI plumbing.
+// It also says what sans-serif is: without that, a font a subtitle names but does not
+// embed falls back to whatever fontconfig sorts first, which on devices with many vendor
+// fonts (e.g. Xiaomi's /product/fonts) is a display font without Latin Extended glyphs,
+// so letters such as Polish diacritics come from yet another font.
 static char* ensureFontsConf(void) {
   const char* tmp = getenv("TMPDIR");
   if (tmp == NULL || tmp[0] == '\0') tmp = "/data/local/tmp";
@@ -180,6 +184,14 @@ static char* ensureFontsConf(void) {
       "  <dir>/product/fonts</dir>\n"
       "  <dir>/data/fonts</dir>\n"
       "  <cachedir>%s</cachedir>\n"
+      "  <alias>\n"
+      "    <family>sans-serif</family>\n"
+      "    <prefer>\n"
+      "      <family>Roboto</family>\n"
+      "      <family>Noto Sans</family>\n"
+      "      <family>Droid Sans</family>\n"
+      "    </prefer>\n"
+      "  </alias>\n"
       "</fontconfig>\n",
       cacheDir);
   fclose(f);
