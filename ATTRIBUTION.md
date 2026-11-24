@@ -35,13 +35,23 @@ AssSubtitleSurfaceView, SpecRenderEngine, AssPack) comes from this project.
 - Author: edde746
 - License: GPL-3.0
 
-## edde746/libass (native library)
+## Laskco/mpvNova-libass (native library)
 
-The prebuilt `libass.a` static library is sourced from edde746's fork of libass,
-which adds Android static library builds, multi-threaded rendering support, and
-performance optimizations (ASS_FEATURE_FAST_BLUR, HarfBuzz subfonts reuse,
-batch thread accounting) on top of upstream [libass/libass](https://github.com/libass/libass).
+The `libass.a` static library is built from Laskco's fork of libass, pinned as the
+`libass` submodule. It adds multi-threaded event rendering, less processing of
+large off-screen effects, better reuse of cached bitmaps, ARMv7 and ARM64 NEON
+rendering paths, and a performance mode on top of upstream
+[libass/libass](https://github.com/libass/libass).
+
+- Repository: https://github.com/Laskco/mpvNova-libass
+- Upstream: https://github.com/libass/libass
+- License: ISC
+
+## edde746/libass (Android build script)
+
+`scripts/libass/build-android.sh` is adapted from the Android release script in
+edde746's fork of libass, which nuvio-libass used for its prebuilt `libass.a`
+before switching to Laskco's fork.
 
 - Repository: https://github.com/edde746/libass
-- Upstream: https://github.com/libass/libass
 - License: ISC

@@ -75,11 +75,6 @@ JNIEXPORT void JNICALL Java_com_nuvio_tv_libass_Ass_nativeAssDeinit(JNIEnv* env,
 JNIEXPORT jlong JNICALL
 Java_com_nuvio_tv_libass_AssTrack_nativeAssTrackInit(JNIEnv* env, jclass clazz, jlong ass) {
   ASS_Track* track = ass_new_track((ASS_Library*)ass);
-  if (track != NULL) {
-    if (ass_track_set_feature(track, ASS_FEATURE_FAST_BLUR, 1) != 0) {
-      __android_log_print(ANDROID_LOG_WARN, LOG_TAG, "ASS_FEATURE_FAST_BLUR unavailable in libass build");
-    }
-  }
   return (jlong)track;
 }
 
@@ -200,14 +195,9 @@ static char* ensureFontsConf(void) {
 
 JNIEXPORT jlong JNICALL
 Java_com_nuvio_tv_libass_AssRender_nativeAssRenderInit(JNIEnv* env, jclass clazz, jlong ass) {
+  setenv("LIBASS_EXPERIMENTAL_EDGES", "1", 0);
   ASS_Renderer* assRenderer = ass_renderer_init((ASS_Library*)ass);
   if (assRenderer == NULL) return 0;
-  unsigned threads = ass_set_threads(assRenderer, 0);
-  if (threads == 0) {
-    __android_log_print(ANDROID_LOG_WARN, LOG_TAG, "libass threading unavailable in native build");
-  } else {
-    __android_log_print(ANDROID_LOG_INFO, LOG_TAG, "libass rendering threads enabled: %u", threads);
-  }
   char* fontsConf = ensureFontsConf();
   ass_set_fonts(assRenderer, NULL, "sans-serif", ASS_FONTPROVIDER_FONTCONFIG, fontsConf, 1);
   free(fontsConf);

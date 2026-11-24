@@ -2,19 +2,19 @@
 # Based on Plezy by edde746 (https://github.com/edde746/plezy),
 # which is a fork of libass-android by peerless2012
 # (https://github.com/peerless2012/libass-android).
-# See libass/ATTRIBUTION.md for full credits.
+# See ATTRIBUTION.md for full credits.
 #
-# Prebuilt libass from https://github.com/edde746/libass (fork of libass/libass
-# with Android static library builds and performance optimizations).
+# Prebuilt libass from this repository's libass-* releases, built from the libass
+# submodule (https://github.com/Laskco/mpvNova-libass, a fork of libass/libass).
 cmake_minimum_required(VERSION 3.22.1)
 
 project("asskt")
 
 # Fetching the fork release at configure time keeps per-ABI static archives out
 # of git; the pinned hash makes that network step reproducible.
-set(LIBASS_VERSION "0.18.4")
-set(LIBASS_SHA256 "5450cdb842dab2a052456aec6c09fd12f5c17132a09a444cc7b8017597551507")
-set(LIBASS_ZIP_URL "https://github.com/edde746/libass/releases/download/${LIBASS_VERSION}/libass-android-${LIBASS_VERSION}.zip")
+set(LIBASS_VERSION "0.17.5-laskco-b620927")
+set(LIBASS_SHA256 "dbf588d247340afc7a3b65923b6d377e685676f4a4238bdf0075cf46e4e75f4d")
+set(LIBASS_ZIP_URL "https://github.com/NuvioMedia/nuvio-libass/releases/download/libass-${LIBASS_VERSION}/libass-android-${LIBASS_VERSION}.zip")
 
 # Gradle passes one cache root so per-ABI CMake builds share the download.
 if(NOT DEFINED LIBASS_CACHE_DIR)

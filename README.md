@@ -74,4 +74,6 @@ This module is based on [Plezy's](https://github.com/edde746/plezy)
 which is a fork of [libass-android](https://github.com/peerless2012/libass-android)
 by peerless2012. The video effects path is inspired by
 [peerless2012/libass-android PR #90](https://github.com/peerless2012/libass-android/pull/90)
-by moi15moi.
+by moi15moi. The native libass comes from
+[Laskco/mpvNova-libass](https://github.com/Laskco/mpvNova-libass), pinned as the
+`libass` submodule.
