@@ -29,6 +29,23 @@ Copy it to your app's `libs/` folder and add:
 implementation(files("libs/nuvio-libass-release.aar"))
 ```
 
+### Native libass
+
+The AAR build downloads a prebuilt libass package from this repository's releases
+(`LIBASS_VERSION` and `LIBASS_SHA256` in `src/main/cpp/CMakeLists.txt`). The package
+is built from the `libass` submodule by `scripts/libass/build-android.sh`, with the
+dependency versions pinned in `scripts/libass/wraps`.
+
+To update libass:
+
+1. Move the submodule to the new commit: `git -C libass fetch && git -C libass checkout <commit>`.
+2. Commit, then push a `libass-<version>` tag, for example `libass-0.17.5-laskco-b620927`.
+   The `libass Android package` workflow builds the package and attaches it to that release.
+3. Set `LIBASS_VERSION` and `LIBASS_SHA256` from the workflow summary and rebuild the AAR.
+
+Building the package locally needs the Android NDK, Meson 1.11 or newer, Ninja, gperf
+and nasm.
+
 ### Video Effects path
 
 ```kotlin
