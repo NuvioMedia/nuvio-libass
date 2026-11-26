@@ -38,8 +38,9 @@ class AssTrack(private val ass: Long, private val lock: ReentrantLock) {
 
   /**
    * Lock-free queue for dialogue chunks fed by the extractor thread.
-   * Drained under lock by the render thread before each render, so the
-   * extractor never blocks on the libass lock and video/audio buffering
+   * Drained under lock by the render thread before each render, or by the
+   * extractor when the lock is free, so the extractor never blocks on the
+   * libass lock and video/audio buffering
    * is not stalled by heavy subtitle rendering.
    */
   private val pendingChunks = ConcurrentLinkedQueue<PendingChunk>()
@@ -66,16 +67,25 @@ class AssTrack(private val ass: Long, private val lock: ReentrantLock) {
   fun readChunk(start: Long, duration: Long, array: ByteArray, offset: Int = 0, length: Int = array.size) = withNative { nativeAssTrackReadChunk(it, start, duration, array, offset, length) }
 
   /**
-   * Enqueues a dialogue chunk without acquiring the lock. The chunk will be
-   * fed to libass by [drainPendingChunks] on the render thread before the
-   * next render. This keeps the extractor thread unblocked so video/audio
-   * buffering is never stalled by long libass renders.
+   * Enqueues a dialogue chunk without waiting for the lock. When the lock is
+   * free the queue is fed to libass right away; otherwise [drainPendingChunks]
+   * feeds it on a later call or on the render thread before the next render.
+   * This keeps the extractor thread unblocked so video/audio buffering is never
+   * stalled by long libass renders, and keeps tracks that are not rendered from
+   * holding their chunks on the Java heap.
    */
   fun enqueueChunk(start: Long, duration: Long, data: ByteArray, offset: Int = 0, length: Int = data.size) {
     if (released) return
     // Copy the data since the caller's buffer may be reused
     val copy = data.copyOfRange(offset, offset + length)
     pendingChunks.add(PendingChunk(start, duration, copy, 0, copy.size))
+    if (lock.tryLock()) {
+      try {
+        drainPendingChunks()
+      } finally {
+        lock.unlock()
+      }
+    }
   }
 
   /**

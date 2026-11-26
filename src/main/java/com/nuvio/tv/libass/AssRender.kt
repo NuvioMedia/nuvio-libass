@@ -135,8 +135,8 @@ class AssRender(nativeAss: Long, private val lock: ReentrantLock) {
       val t = track ?: return null
       if (t.released || t.nativeAssTrack == 0L) return null
       // Drain any dialogue chunks queued by the extractor thread before rendering.
-      // This is the only place pending chunks are fed to libass, keeping the
-      // extractor thread completely lock-free.
+      // The extractor only feeds them itself when the lock is free, so it never
+      // waits on a render.
       t.drainPendingChunks()
       val header = frameHeader
       val status =
