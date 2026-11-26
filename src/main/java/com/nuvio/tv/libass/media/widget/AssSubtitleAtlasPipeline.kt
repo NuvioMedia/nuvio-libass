@@ -95,6 +95,9 @@ internal object AssAtlasPipelineConfig {
    */
   internal const val COMPOSITOR_PHASE_LEAD_ENABLED = false
 
+  internal const val LIBASS_THREAD_PRIORITY =
+    Process.THREAD_PRIORITY_DEFAULT + 2 * Process.THREAD_PRIORITY_LESS_FAVORABLE
+
   /**
    * Internal raster resolution for the libass overlay, as a fraction of the
    * physical surface (1.0 = full, off). Lowering it shrinks the libass frame so
@@ -561,7 +564,7 @@ private class AtlasLibassThread(
   private val glTakenSlot: () -> Int,
   private val stateGeneration: () -> Long,
   private val onFrameReady: (AtlasPayload) -> Unit
-) : HandlerThread(TAG, Process.THREAD_PRIORITY_DISPLAY) {
+) : HandlerThread(TAG, AssAtlasPipelineConfig.LIBASS_THREAD_PRIORITY) {
 
   /** Immutable frame request - handed off through a single atomic so a concurrent
    *  enqueue can neither be lost by drain's consume nor torn in half. [ptsUs] is

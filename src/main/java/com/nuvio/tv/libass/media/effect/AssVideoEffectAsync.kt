@@ -9,7 +9,6 @@ import android.opengl.EGLSurface
 import android.opengl.GLES20
 import android.os.Handler
 import android.os.HandlerThread
-import android.os.Process
 import android.util.Log
 import androidx.media3.common.C
 import androidx.media3.common.GlObjectsProvider
@@ -237,7 +236,7 @@ private class AssVideoEffectAsyncProgram(
         renderEglSurface = EGL14.eglCreatePbufferSurface(mainDisp, cfgs[0]!!, sfcAttr, 0)
         Log.i(TAG, "pbuffer surface=$renderEglSurface")
 
-        renderThread = HandlerThread("AssRenderGL", Process.THREAD_PRIORITY_DISPLAY).also { it.start() }
+        renderThread = HandlerThread("AssRenderGL", AssAtlasPipelineConfig.LIBASS_THREAD_PRIORITY).also { it.start() }
         renderHandler = Handler(renderThread!!.looper)
     }
 
