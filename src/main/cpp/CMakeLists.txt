@@ -12,8 +12,8 @@ project("asskt")
 
 # Fetching the fork release at configure time keeps per-ABI static archives out
 # of git; the pinned hash makes that network step reproducible.
-set(LIBASS_VERSION "0.17.5-laskco-b620927")
-set(LIBASS_SHA256 "dbf588d247340afc7a3b65923b6d377e685676f4a4238bdf0075cf46e4e75f4d")
+set(LIBASS_VERSION "0.17.5-laskco-2598476")
+set(LIBASS_SHA256 "13c6d8cfb8efae9f11fe31b866638bfee5a140f360f9ae05be4bdfe98c0507e8")
 set(LIBASS_ZIP_URL "https://github.com/NuvioMedia/nuvio-libass/releases/download/libass-${LIBASS_VERSION}/libass-android-${LIBASS_VERSION}.zip")
 
 # Gradle passes one cache root so per-ABI CMake builds share the download.
